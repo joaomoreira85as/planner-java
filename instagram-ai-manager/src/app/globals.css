@@ -1,0 +1,96 @@
+@import "tailwindcss";
+
+@theme {
+  /* Paleta oficial do gradiente do Instagram */
+  --color-insta-purple: #833ab4;
+  --color-insta-magenta: #c13584;
+  --color-insta-pink: #e1306c;
+  --color-insta-red: #fd1d1d;
+  --color-insta-orange: #f77737;
+  --color-insta-yellow: #fcb045;
+
+  /* Superfícies escuras do app */
+  --color-bg: #0b0b10;
+  --color-surface: #14141c;
+  --color-surface-2: #1c1c26;
+  --color-edge: #2a2a36;
+  --color-ink: #f4f4f8;
+  --color-ink-dim: #9c9cae;
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+/* Gradiente assinatura do Instagram */
+.insta-gradient {
+  background-image: linear-gradient(
+    45deg,
+    #833ab4 0%,
+    #c13584 25%,
+    #e1306c 45%,
+    #fd1d1d 65%,
+    #f77737 85%,
+    #fcb045 100%
+  );
+}
+
+.insta-gradient-text {
+  background-image: linear-gradient(45deg, #833ab4, #e1306c, #f77737, #fcb045);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.insta-ring {
+  position: relative;
+}
+.insta-ring::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background-image: linear-gradient(45deg, #833ab4, #e1306c, #fd1d1d, #fcb045);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-edge);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.fade-up {
+  animation: fade-up 0.35s ease both;
+}
