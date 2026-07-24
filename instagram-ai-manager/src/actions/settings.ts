@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { dbConnect } from "@/lib/db";
-import { BrandProfile } from "@/models";
+import { getSupabase, type BrandProfileRow } from "@/lib/supabase";
 import { serializeBrand } from "@/lib/serialize";
 import type { ActionResult, SerializedBrandProfile } from "@/lib/types";
 
@@ -18,9 +17,13 @@ const brandSchema = z.object({
 
 export async function getBrandProfile(): Promise<SerializedBrandProfile> {
   try {
-    await dbConnect();
-    const doc = await BrandProfile.findOne({ key: "default" }).lean();
-    return serializeBrand(doc);
+    const supabase = getSupabase();
+    const { data } = await supabase
+      .from("brand_profiles")
+      .select()
+      .eq("key", "default")
+      .maybeSingle<BrandProfileRow>();
+    return serializeBrand(data ?? null);
   } catch {
     return serializeBrand(null);
   }
@@ -34,15 +37,21 @@ export async function saveBrandProfile(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
   try {
-    await dbConnect();
-    await BrandProfile.findOneAndUpdate({ key: "default" }, parsed.data, {
-      upsert: true,
-      new: true,
+    const supabase = getSupabase();
+    const { error } = await supabase.from("brand_profiles").upsert({
+      key: "default",
+      brand_name: parsed.data.brandName,
+      niche: parsed.data.niche,
+      tone_of_voice: parsed.data.toneOfVoice,
+      target_audience: parsed.data.targetAudience,
+      posting_frequency: parsed.data.postingFrequency,
+      extra_context: parsed.data.extraContext,
     });
+    if (error) throw error;
     revalidatePath("/configuracoes");
     revalidatePath("/");
     return { ok: true };
   } catch {
-    return { ok: false, error: "Falha ao salvar. O MongoDB está acessível?" };
+    return { ok: false, error: "Falha ao salvar. O Supabase está acessível?" };
   }
 }

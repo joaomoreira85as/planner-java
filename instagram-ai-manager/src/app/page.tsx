@@ -8,8 +8,12 @@ import {
   Sparkles,
   UsersRound,
 } from "lucide-react";
-import { dbConnect } from "@/lib/db";
-import { ContentIdea, FollowerSnapshot, Post } from "@/models";
+import {
+  getSupabase,
+  type ContentIdeaRow,
+  type FollowerSnapshotRow,
+  type PostRow,
+} from "@/lib/supabase";
 import { serializeIdea, serializePost, serializeSnapshot } from "@/lib/serialize";
 import { Button, Card, EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import { IdeasList } from "@/components/dashboard/IdeasList";
@@ -28,31 +32,67 @@ async function getData() {
     dbOk: false,
   };
   try {
-    await dbConnect();
+    const supabase = getSupabase();
     const now = new Date();
-    const in7 = new Date(now.getTime() + 7 * 86400_000);
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const [upcoming, ready, monthCount, snapshots, ideas] = await Promise.all([
-      Post.find({ status: "agendado", scheduledAt: { $gte: now, $lte: in7 } })
-        .sort({ scheduledAt: 1 })
-        .limit(6)
-        .lean(),
-      Post.find({ status: "pronto" }).sort({ updatedAt: -1 }).limit(6).lean(),
-      Post.countDocuments({
-        $or: [
-          { publishedAt: { $gte: monthStart } },
-          { scheduledAt: { $gte: monthStart, $lte: now } },
-        ],
-      }),
-      FollowerSnapshot.find().sort({ recordedAt: 1 }).limit(100).lean(),
-      ContentIdea.find({ used: false }).sort({ createdAt: -1 }).limit(8).lean(),
-    ]);
+    const nowIso = now.toISOString();
+    const in7Iso = new Date(now.getTime() + 7 * 86400_000).toISOString();
+    const monthStartIso = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      1
+    ).toISOString();
+
+    const [upcoming, ready, published, dueThisMonth, snapshots, ideas] =
+      await Promise.all([
+        supabase
+          .from("posts")
+          .select()
+          .eq("status", "agendado")
+          .gte("scheduled_at", nowIso)
+          .lte("scheduled_at", in7Iso)
+          .order("scheduled_at", { ascending: true })
+          .limit(6)
+          .returns<PostRow[]>(),
+        supabase
+          .from("posts")
+          .select()
+          .eq("status", "pronto")
+          .order("updated_at", { ascending: false })
+          .limit(6)
+          .returns<PostRow[]>(),
+        supabase
+          .from("posts")
+          .select("id", { count: "exact", head: true })
+          .gte("published_at", monthStartIso),
+        supabase
+          .from("posts")
+          .select("id", { count: "exact", head: true })
+          .is("published_at", null)
+          .gte("scheduled_at", monthStartIso)
+          .lte("scheduled_at", nowIso),
+        supabase
+          .from("follower_snapshots")
+          .select()
+          .order("recorded_at", { ascending: true })
+          .limit(100)
+          .returns<FollowerSnapshotRow[]>(),
+        supabase
+          .from("content_ideas")
+          .select()
+          .eq("used", false)
+          .order("created_at", { ascending: false })
+          .limit(8)
+          .returns<ContentIdeaRow[]>(),
+      ]);
+
+    if (upcoming.error) throw upcoming.error;
+
     return {
-      upcoming: upcoming.map(serializePost),
-      ready: ready.map(serializePost),
-      monthCount,
-      snapshots: snapshots.map(serializeSnapshot),
-      ideas: ideas.map(serializeIdea),
+      upcoming: (upcoming.data ?? []).map(serializePost),
+      ready: (ready.data ?? []).map(serializePost),
+      monthCount: (published.count ?? 0) + (dueThisMonth.count ?? 0),
+      snapshots: (snapshots.data ?? []).map(serializeSnapshot),
+      ideas: (ideas.data ?? []).map(serializeIdea),
       dbOk: true,
     };
   } catch {
@@ -114,9 +154,10 @@ export default async function DashboardPage() {
       {!dbOk && (
         <Card className="mb-4 border-insta-red/40">
           <p className="text-sm">
-            ⚠️ Não consegui conectar ao MongoDB. Confira a variável{" "}
-            <code className="font-mono">MONGODB_URI</code> no arquivo{" "}
-            <code className="font-mono">.env</code> e se o banco está no ar.
+            ⚠️ Não consegui conectar ao Supabase. Confira{" "}
+            <code className="font-mono">SUPABASE_URL</code> e{" "}
+            <code className="font-mono">SUPABASE_KEY</code> no arquivo{" "}
+            <code className="font-mono">.env</code>.
           </p>
         </Card>
       )}

@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { dbConnect } from "@/lib/db";
-import { FollowerSnapshot, PostMetric } from "@/models";
+import { getSupabase } from "@/lib/supabase";
 import type { ActionResult } from "@/lib/types";
 
 const metricSchema = z.object({
@@ -21,8 +20,16 @@ export async function addPostMetric(
   const parsed = metricSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Valores de métrica inválidos" };
   try {
-    await dbConnect();
-    await PostMetric.create(parsed.data);
+    const supabase = getSupabase();
+    const { error } = await supabase.from("post_metrics").insert({
+      post_id: parsed.data.postId,
+      likes: parsed.data.likes,
+      comments: parsed.data.comments,
+      saves: parsed.data.saves,
+      shares: parsed.data.shares,
+      reach: parsed.data.reach,
+    });
+    if (error) throw error;
     revalidatePath("/crescimento");
     revalidatePath(`/posts/${parsed.data.postId}`);
     return { ok: true };
@@ -35,8 +42,11 @@ export async function addFollowerSnapshot(count: number): Promise<ActionResult> 
   const parsed = z.number().int().min(0).safeParse(count);
   if (!parsed.success) return { ok: false, error: "Número de seguidores inválido" };
   try {
-    await dbConnect();
-    await FollowerSnapshot.create({ count: parsed.data });
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from("follower_snapshots")
+      .insert({ count: parsed.data });
+    if (error) throw error;
     revalidatePath("/crescimento");
     revalidatePath("/");
     return { ok: true };

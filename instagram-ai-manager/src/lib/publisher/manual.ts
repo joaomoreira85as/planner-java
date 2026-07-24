@@ -1,4 +1,4 @@
-import { Post } from "@/models";
+import { getSupabase } from "@/lib/supabase";
 import type { Publisher, PublishResult } from "./types";
 
 /**
@@ -15,12 +15,14 @@ export const manualPublisher: Publisher = {
   },
 
   async publish(postId: string): Promise<PublishResult> {
-    const doc = await Post.findByIdAndUpdate(
-      postId,
-      { status: "pronto" },
-      { new: true }
-    );
-    if (!doc) return { ok: false, error: "Post não encontrado" };
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("posts")
+      .update({ status: "pronto" })
+      .eq("id", postId)
+      .select("id")
+      .single();
+    if (error || !data) return { ok: false, error: "Post não encontrado" };
     return { ok: true, status: "pronto" };
   },
 };

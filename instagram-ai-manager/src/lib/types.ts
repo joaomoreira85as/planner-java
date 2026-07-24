@@ -1,6 +1,6 @@
 /** Tipos serializados (plain objects) trocados entre server e client components. */
 
-import type { PostStatus } from "@/models";
+import type { PostStatus } from "./supabase-types";
 
 export type { PostStatus };
 

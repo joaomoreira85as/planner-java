@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
-import mongoose from "mongoose";
-import { dbConnect } from "@/lib/db";
-import { Post, PostMetric } from "@/models";
+import { getSupabase, type PostMetricRow, type PostRow } from "@/lib/supabase";
 import { serializeMetric, serializePost } from "@/lib/serialize";
 import { PostDetail } from "@/components/posts/PostDetail";
 
 export const dynamic = "force-dynamic";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default async function PostPage({
   params,
@@ -13,20 +14,28 @@ export default async function PostPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  if (!mongoose.isValidObjectId(id)) notFound();
+  if (!UUID_RE.test(id)) notFound();
 
-  await dbConnect();
-  const doc = await Post.findById(id).lean();
-  if (!doc) notFound();
-  const metrics = await PostMetric.find({ postId: id })
-    .sort({ recordedAt: -1 })
+  const supabase = getSupabase();
+  const { data: post } = await supabase
+    .from("posts")
+    .select()
+    .eq("id", id)
+    .maybeSingle<PostRow>();
+  if (!post) notFound();
+
+  const { data: metrics } = await supabase
+    .from("post_metrics")
+    .select()
+    .eq("post_id", id)
+    .order("recorded_at", { ascending: false })
     .limit(20)
-    .lean();
+    .returns<PostMetricRow[]>();
 
   return (
     <PostDetail
-      post={serializePost(doc)}
-      metrics={metrics.map(serializeMetric)}
+      post={serializePost(post)}
+      metrics={(metrics ?? []).map(serializeMetric)}
     />
   );
 }

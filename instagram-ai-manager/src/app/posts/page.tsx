@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { Images, Plus, Sparkles } from "lucide-react";
-import { dbConnect } from "@/lib/db";
-import { Post } from "@/models";
+import { getSupabase, type PostRow } from "@/lib/supabase";
 import { serializePost } from "@/lib/serialize";
 import { Button, Card, EmptyState, PageHeader, StatusBadge } from "@/components/ui";
 import type { SerializedPost } from "@/lib/types";
@@ -11,9 +10,14 @@ export const dynamic = "force-dynamic";
 
 async function getPosts(): Promise<SerializedPost[]> {
   try {
-    await dbConnect();
-    const docs = await Post.find().sort({ createdAt: -1 }).limit(100).lean();
-    return docs.map(serializePost);
+    const supabase = getSupabase();
+    const { data } = await supabase
+      .from("posts")
+      .select()
+      .order("created_at", { ascending: false })
+      .limit(100)
+      .returns<PostRow[]>();
+    return (data ?? []).map(serializePost);
   } catch {
     return [];
   }

@@ -2,16 +2,18 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { dbConnect } from "@/lib/db";
-import { ContentIdea } from "@/models";
+import { getSupabase } from "@/lib/supabase";
 import type { ActionResult } from "@/lib/types";
 
 export async function addIdea(title: string, notes = ""): Promise<ActionResult> {
   const parsed = z.string().min(1).max(300).safeParse(title.trim());
   if (!parsed.success) return { ok: false, error: "Título inválido" };
   try {
-    await dbConnect();
-    await ContentIdea.create({ title: parsed.data, notes: notes.slice(0, 2000) });
+    const supabase = getSupabase();
+    const { error } = await supabase
+      .from("content_ideas")
+      .insert({ title: parsed.data, notes: notes.slice(0, 2000) });
+    if (error) throw error;
     revalidatePath("/");
     return { ok: true };
   } catch {
@@ -21,8 +23,8 @@ export async function addIdea(title: string, notes = ""): Promise<ActionResult> 
 
 export async function toggleIdea(id: string, used: boolean): Promise<ActionResult> {
   try {
-    await dbConnect();
-    await ContentIdea.findByIdAndUpdate(id, { used });
+    const supabase = getSupabase();
+    await supabase.from("content_ideas").update({ used }).eq("id", id);
     revalidatePath("/");
     return { ok: true };
   } catch {
@@ -32,8 +34,8 @@ export async function toggleIdea(id: string, used: boolean): Promise<ActionResul
 
 export async function deleteIdea(id: string): Promise<ActionResult> {
   try {
-    await dbConnect();
-    await ContentIdea.findByIdAndDelete(id);
+    const supabase = getSupabase();
+    await supabase.from("content_ideas").delete().eq("id", id);
     revalidatePath("/");
     return { ok: true };
   } catch {

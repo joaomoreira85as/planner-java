@@ -2,8 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { dbConnect } from "@/lib/db";
-import { Post, POST_STATUSES } from "@/models";
+import { getSupabase, POST_STATUSES, type PostRow } from "@/lib/supabase";
 import { serializePost } from "@/lib/serialize";
 import type { ActionResult, SerializedPost } from "@/lib/types";
 import { getPublisher } from "@/lib/publisher";
@@ -25,6 +24,20 @@ function revalidateAll() {
   for (const p of ["/", "/posts", "/calendario", "/crescimento"]) revalidatePath(p);
 }
 
+/** Converte o input camelCase para as colunas snake_case do Postgres. */
+function toRow(input: Partial<PostInput>) {
+  const row: Record<string, unknown> = {};
+  if (input.caption !== undefined) row.caption = input.caption;
+  if (input.hashtags !== undefined) row.hashtags = input.hashtags;
+  if (input.imagePrompt !== undefined) row.image_prompt = input.imagePrompt;
+  if (input.imageFile !== undefined) row.image_file = input.imageFile;
+  if (input.theme !== undefined) row.theme = input.theme;
+  if (input.rationale !== undefined) row.rationale = input.rationale;
+  if (input.suggestedTime !== undefined) row.suggested_time = input.suggestedTime;
+  if (input.scheduledAt !== undefined) row.scheduled_at = input.scheduledAt;
+  return row;
+}
+
 export async function createPost(
   input: PostInput
 ): Promise<ActionResult<SerializedPost>> {
@@ -33,17 +46,20 @@ export async function createPost(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
   try {
-    await dbConnect();
-    const { scheduledAt, ...rest } = parsed.data;
-    const doc = await Post.create({
-      ...rest,
-      scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
-      status: scheduledAt ? "agendado" : "rascunho",
-    });
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("posts")
+      .insert({
+        ...toRow(parsed.data),
+        status: parsed.data.scheduledAt ? "agendado" : "rascunho",
+      })
+      .select()
+      .single<PostRow>();
+    if (error || !data) throw error;
     revalidateAll();
-    return { ok: true, data: serializePost(doc.toObject()) };
+    return { ok: true, data: serializePost(data) };
   } catch {
-    return { ok: false, error: "Falha ao salvar o post. O MongoDB está acessível?" };
+    return { ok: false, error: "Falha ao salvar o post. O Supabase está acessível?" };
   }
 }
 
@@ -56,17 +72,17 @@ export async function updatePost(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Dados inválidos" };
   }
   try {
-    await dbConnect();
-    const { scheduledAt, ...rest } = parsed.data;
-    const update: Record<string, unknown> = { ...rest };
-    if (scheduledAt !== undefined) {
-      update.scheduledAt = scheduledAt ? new Date(scheduledAt) : null;
-    }
-    const doc = await Post.findByIdAndUpdate(id, update, { new: true }).lean();
-    if (!doc) return { ok: false, error: "Post não encontrado" };
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("posts")
+      .update(toRow(parsed.data))
+      .eq("id", id)
+      .select()
+      .single<PostRow>();
+    if (error || !data) return { ok: false, error: "Post não encontrado" };
     revalidateAll();
     revalidatePath(`/posts/${id}`);
-    return { ok: true, data: serializePost(doc) };
+    return { ok: true, data: serializePost(data) };
   } catch {
     return { ok: false, error: "Falha ao atualizar o post" };
   }
@@ -81,14 +97,19 @@ export async function setPostStatus(
   const parsed = statusSchema.safeParse(status);
   if (!parsed.success) return { ok: false, error: "Status inválido" };
   try {
-    await dbConnect();
+    const supabase = getSupabase();
     const update: Record<string, unknown> = { status: parsed.data };
-    if (parsed.data === "publicado") update.publishedAt = new Date();
-    const doc = await Post.findByIdAndUpdate(id, update, { new: true }).lean();
-    if (!doc) return { ok: false, error: "Post não encontrado" };
+    if (parsed.data === "publicado") update.published_at = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("posts")
+      .update(update)
+      .eq("id", id)
+      .select()
+      .single<PostRow>();
+    if (error || !data) return { ok: false, error: "Post não encontrado" };
     revalidateAll();
     revalidatePath(`/posts/${id}`);
-    return { ok: true, data: serializePost(doc) };
+    return { ok: true, data: serializePost(data) };
   } catch {
     return { ok: false, error: "Falha ao mudar o status" };
   }
@@ -97,16 +118,19 @@ export async function setPostStatus(
 /** Envia o post pelo publisher ativo (hoje: fluxo manual → status "pronto"). */
 export async function publishPost(id: string): Promise<ActionResult<SerializedPost>> {
   try {
-    await dbConnect();
-    const doc = await Post.findById(id);
-    if (!doc) return { ok: false, error: "Post não encontrado" };
     const publisher = getPublisher();
-    const result = await publisher.publish(String(doc._id));
+    const result = await publisher.publish(id);
     if (!result.ok) return { ok: false, error: result.error };
-    const fresh = await Post.findById(id).lean();
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from("posts")
+      .select()
+      .eq("id", id)
+      .single<PostRow>();
+    if (error || !data) return { ok: false, error: "Post não encontrado" };
     revalidateAll();
     revalidatePath(`/posts/${id}`);
-    return { ok: true, data: serializePost(fresh) };
+    return { ok: true, data: serializePost(data) };
   } catch {
     return { ok: false, error: "Falha ao publicar" };
   }
@@ -114,8 +138,8 @@ export async function publishPost(id: string): Promise<ActionResult<SerializedPo
 
 export async function deletePost(id: string): Promise<ActionResult> {
   try {
-    await dbConnect();
-    await Post.findByIdAndDelete(id);
+    const supabase = getSupabase();
+    await supabase.from("posts").delete().eq("id", id);
     revalidateAll();
     return { ok: true };
   } catch {

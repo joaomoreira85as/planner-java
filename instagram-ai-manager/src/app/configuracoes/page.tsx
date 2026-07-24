@@ -12,7 +12,11 @@ export default async function ConfiguracoesPage() {
   const keys = [
     { name: "ANTHROPIC_API_KEY", label: "Claude (textos)", set: Boolean(process.env.ANTHROPIC_API_KEY) },
     { name: "OPENAI_API_KEY", label: "OpenAI (imagens)", set: Boolean(process.env.OPENAI_API_KEY) },
-    { name: "MONGODB_URI", label: "MongoDB", set: Boolean(process.env.MONGODB_URI) },
+    {
+      name: "SUPABASE_URL + SUPABASE_KEY",
+      label: "Supabase (banco e imagens)",
+      set: Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_KEY),
+    },
   ];
 
   return (

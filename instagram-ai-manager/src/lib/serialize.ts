@@ -1,4 +1,11 @@
 import type {
+  BrandProfileRow,
+  ContentIdeaRow,
+  FollowerSnapshotRow,
+  PostMetricRow,
+  PostRow,
+} from "./supabase-types";
+import type {
   SerializedBrandProfile,
   SerializedIdea,
   SerializedMetric,
@@ -6,69 +13,64 @@ import type {
   SerializedSnapshot,
 } from "./types";
 
-/* Converte documentos Mongoose (via .toObject()/lean) em objetos serializáveis. */
+/* Converte linhas do Postgres (snake_case) em objetos camelCase para a UI. */
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDoc = any;
-
-const iso = (d: Date | null | undefined) => (d ? new Date(d).toISOString() : null);
-
-export function serializePost(doc: AnyDoc): SerializedPost {
+export function serializePost(row: PostRow): SerializedPost {
   return {
-    id: String(doc._id),
-    caption: doc.caption,
-    hashtags: doc.hashtags ?? [],
-    imagePrompt: doc.imagePrompt ?? null,
-    imageFile: doc.imageFile ?? null,
-    status: doc.status,
-    theme: doc.theme ?? null,
-    rationale: doc.rationale ?? null,
-    suggestedTime: doc.suggestedTime ?? null,
-    scheduledAt: iso(doc.scheduledAt),
-    publishedAt: iso(doc.publishedAt),
-    createdAt: iso(doc.createdAt)!,
-    updatedAt: iso(doc.updatedAt)!,
+    id: row.id,
+    caption: row.caption,
+    hashtags: row.hashtags ?? [],
+    imagePrompt: row.image_prompt,
+    imageFile: row.image_file,
+    status: row.status,
+    theme: row.theme,
+    rationale: row.rationale,
+    suggestedTime: row.suggested_time,
+    scheduledAt: row.scheduled_at,
+    publishedAt: row.published_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
-export function serializeBrand(doc: AnyDoc | null): SerializedBrandProfile {
+export function serializeBrand(row: BrandProfileRow | null): SerializedBrandProfile {
   return {
-    brandName: doc?.brandName ?? "",
-    niche: doc?.niche ?? "",
-    toneOfVoice: doc?.toneOfVoice ?? "",
-    targetAudience: doc?.targetAudience ?? "",
-    postingFrequency: doc?.postingFrequency ?? "3x por semana",
-    extraContext: doc?.extraContext ?? "",
+    brandName: row?.brand_name ?? "",
+    niche: row?.niche ?? "",
+    toneOfVoice: row?.tone_of_voice ?? "",
+    targetAudience: row?.target_audience ?? "",
+    postingFrequency: row?.posting_frequency ?? "3x por semana",
+    extraContext: row?.extra_context ?? "",
   };
 }
 
-export function serializeMetric(doc: AnyDoc): SerializedMetric {
+export function serializeMetric(row: PostMetricRow): SerializedMetric {
   return {
-    id: String(doc._id),
-    postId: String(doc.postId),
-    likes: doc.likes ?? 0,
-    comments: doc.comments ?? 0,
-    saves: doc.saves ?? 0,
-    shares: doc.shares ?? 0,
-    reach: doc.reach ?? 0,
-    recordedAt: iso(doc.recordedAt)!,
+    id: row.id,
+    postId: row.post_id,
+    likes: row.likes,
+    comments: row.comments,
+    saves: row.saves,
+    shares: row.shares,
+    reach: row.reach,
+    recordedAt: row.recorded_at,
   };
 }
 
-export function serializeSnapshot(doc: AnyDoc): SerializedSnapshot {
+export function serializeSnapshot(row: FollowerSnapshotRow): SerializedSnapshot {
   return {
-    id: String(doc._id),
-    count: doc.count,
-    recordedAt: iso(doc.recordedAt)!,
+    id: row.id,
+    count: row.count,
+    recordedAt: row.recorded_at,
   };
 }
 
-export function serializeIdea(doc: AnyDoc): SerializedIdea {
+export function serializeIdea(row: ContentIdeaRow): SerializedIdea {
   return {
-    id: String(doc._id),
-    title: doc.title,
-    notes: doc.notes ?? "",
-    used: doc.used ?? false,
-    createdAt: iso(doc.createdAt)!,
+    id: row.id,
+    title: row.title,
+    notes: row.notes,
+    used: row.used,
+    createdAt: row.created_at,
   };
 }

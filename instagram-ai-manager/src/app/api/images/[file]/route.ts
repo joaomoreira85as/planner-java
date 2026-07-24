@@ -1,20 +1,23 @@
-import { readFile } from "fs/promises";
-import path from "path";
 import { NextResponse } from "next/server";
-import { IMAGES_DIR } from "@/lib/ai/openai-image";
+import { getSupabase } from "@/lib/supabase";
+import { IMAGES_BUCKET } from "@/lib/ai/openai-image";
 
+/** Serve as imagens do bucket do Supabase Storage (mesma origem → download funciona). */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ file: string }> }
 ) {
   const { file } = await params;
-  const safe = path.basename(file);
-  if (!/^[a-zA-Z0-9_-]+\.png$/.test(safe)) {
+  if (!/^[a-zA-Z0-9_-]+\.png$/.test(file)) {
     return NextResponse.json({ error: "Arquivo inválido" }, { status: 400 });
   }
   try {
-    const buf = await readFile(path.join(IMAGES_DIR, safe));
-    return new NextResponse(new Uint8Array(buf), {
+    const supabase = getSupabase();
+    const { data, error } = await supabase.storage.from(IMAGES_BUCKET).download(file);
+    if (error || !data) {
+      return NextResponse.json({ error: "Imagem não encontrada" }, { status: 404 });
+    }
+    return new NextResponse(data.stream(), {
       headers: {
         "Content-Type": "image/png",
         "Cache-Control": "public, max-age=31536000, immutable",

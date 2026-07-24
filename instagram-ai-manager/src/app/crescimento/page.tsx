@@ -1,6 +1,10 @@
 import { TrendingUp } from "lucide-react";
-import { dbConnect } from "@/lib/db";
-import { FollowerSnapshot, Post, PostMetric } from "@/models";
+import {
+  getSupabase,
+  type FollowerSnapshotRow,
+  type PostMetricRow,
+  type PostRow,
+} from "@/lib/supabase";
 import { serializeMetric, serializePost, serializeSnapshot } from "@/lib/serialize";
 import { PageHeader } from "@/components/ui";
 import { GrowthView } from "@/components/growth/GrowthView";
@@ -12,15 +16,31 @@ export default async function CrescimentoPage() {
   let metrics: ReturnType<typeof serializeMetric>[] = [];
   let snapshots: ReturnType<typeof serializeSnapshot>[] = [];
   try {
-    await dbConnect();
+    const supabase = getSupabase();
     const [p, m, s] = await Promise.all([
-      Post.find({ status: "publicado" }).sort({ publishedAt: -1 }).limit(50).lean(),
-      PostMetric.find().sort({ recordedAt: 1 }).limit(300).lean(),
-      FollowerSnapshot.find().sort({ recordedAt: 1 }).limit(200).lean(),
+      supabase
+        .from("posts")
+        .select()
+        .eq("status", "publicado")
+        .order("published_at", { ascending: false })
+        .limit(50)
+        .returns<PostRow[]>(),
+      supabase
+        .from("post_metrics")
+        .select()
+        .order("recorded_at", { ascending: true })
+        .limit(300)
+        .returns<PostMetricRow[]>(),
+      supabase
+        .from("follower_snapshots")
+        .select()
+        .order("recorded_at", { ascending: true })
+        .limit(200)
+        .returns<FollowerSnapshotRow[]>(),
     ]);
-    posts = p.map(serializePost);
-    metrics = m.map(serializeMetric);
-    snapshots = s.map(serializeSnapshot);
+    posts = (p.data ?? []).map(serializePost);
+    metrics = (m.data ?? []).map(serializeMetric);
+    snapshots = (s.data ?? []).map(serializeSnapshot);
   } catch {
     // sem banco: a página renderiza vazia com instruções
   }

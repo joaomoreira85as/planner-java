@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
-import { dbConnect } from "@/lib/db";
-import { FollowerSnapshot, Post, PostMetric } from "@/models";
+import {
+  getSupabase,
+  type FollowerSnapshotRow,
+  type PostMetricRow,
+  type PostRow,
+} from "@/lib/supabase";
 import { AiConfigError, streamInsights } from "@/lib/ai/claude";
 import { getBrandProfile } from "@/actions/settings";
 
@@ -8,38 +12,56 @@ export const maxDuration = 300;
 
 export async function POST() {
   try {
-    await dbConnect();
-    const [brand, posts, metrics, followers] = await Promise.all([
+    const supabase = getSupabase();
+    const [brand, postsRes, metricsRes, followersRes] = await Promise.all([
       getBrandProfile(),
-      Post.find().sort({ createdAt: -1 }).limit(50).lean(),
-      PostMetric.find().sort({ recordedAt: -1 }).limit(200).lean(),
-      FollowerSnapshot.find().sort({ recordedAt: 1 }).limit(200).lean(),
+      supabase
+        .from("posts")
+        .select()
+        .order("created_at", { ascending: false })
+        .limit(50)
+        .returns<PostRow[]>(),
+      supabase
+        .from("post_metrics")
+        .select()
+        .order("recorded_at", { ascending: false })
+        .limit(200)
+        .returns<PostMetricRow[]>(),
+      supabase
+        .from("follower_snapshots")
+        .select()
+        .order("recorded_at", { ascending: true })
+        .limit(200)
+        .returns<FollowerSnapshotRow[]>(),
     ]);
 
-    const metricsByPost = new Map<string, typeof metrics>();
+    const posts = postsRes.data ?? [];
+    const metrics = metricsRes.data ?? [];
+    const followers = followersRes.data ?? [];
+
+    const metricsByPost = new Map<string, PostMetricRow[]>();
     for (const m of metrics) {
-      const key = String(m.postId);
-      if (!metricsByPost.has(key)) metricsByPost.set(key, []);
-      metricsByPost.get(key)!.push(m);
+      if (!metricsByPost.has(m.post_id)) metricsByPost.set(m.post_id, []);
+      metricsByPost.get(m.post_id)!.push(m);
     }
 
     const payload = {
       followers: followers.map((f) => ({
         count: f.count,
-        recordedAt: new Date(f.recordedAt!).toISOString(),
+        recordedAt: f.recorded_at,
       })),
       posts: posts.map((p) => ({
         caption: p.caption.slice(0, 300),
-        theme: p.theme ?? null,
+        theme: p.theme,
         status: p.status as string,
-        publishedAt: p.publishedAt ? new Date(p.publishedAt).toISOString() : null,
+        publishedAt: p.published_at,
         hashtags: (p.hashtags ?? []).slice(0, 10),
-        metrics: (metricsByPost.get(String(p._id)) ?? []).map((m) => ({
-          likes: m.likes ?? 0,
-          comments: m.comments ?? 0,
-          saves: m.saves ?? 0,
-          shares: m.shares ?? 0,
-          reach: m.reach ?? 0,
+        metrics: (metricsByPost.get(p.id) ?? []).map((m) => ({
+          likes: m.likes,
+          comments: m.comments,
+          saves: m.saves,
+          shares: m.shares,
+          reach: m.reach,
         })),
       })),
     };

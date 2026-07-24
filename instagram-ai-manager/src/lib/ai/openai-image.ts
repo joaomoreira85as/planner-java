@@ -1,11 +1,10 @@
 import "server-only";
-import { mkdir, writeFile } from "fs/promises";
-import path from "path";
 import OpenAI from "openai";
+import { getSupabase } from "@/lib/supabase";
 
 export class ImageConfigError extends Error {}
 
-export const IMAGES_DIR = path.join(process.cwd(), "storage", "images");
+export const IMAGES_BUCKET = "post-images";
 
 let _client: OpenAI | null = null;
 function getClient(): OpenAI {
@@ -18,8 +17,8 @@ function getClient(): OpenAI {
 }
 
 /**
- * Gera uma imagem quadrada com gpt-image-1 e salva em storage/images.
- * Retorna o nome do arquivo salvo.
+ * Gera uma imagem quadrada com gpt-image-1 e envia para o Supabase Storage.
+ * Retorna o nome do arquivo salvo no bucket.
  */
 export async function generateImage(prompt: string, postRef: string): Promise<string> {
   const client = getClient();
@@ -34,9 +33,17 @@ export async function generateImage(prompt: string, postRef: string): Promise<st
   const b64 = result.data?.[0]?.b64_json;
   if (!b64) throw new Error("A API de imagem não retornou dados");
 
-  await mkdir(IMAGES_DIR, { recursive: true });
   const safeRef = postRef.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 40) || "img";
   const filename = `${safeRef}-${Date.now()}.png`;
-  await writeFile(path.join(IMAGES_DIR, filename), Buffer.from(b64, "base64"));
+
+  const supabase = getSupabase();
+  const { error } = await supabase.storage
+    .from(IMAGES_BUCKET)
+    .upload(filename, Buffer.from(b64, "base64"), {
+      contentType: "image/png",
+      upsert: false,
+    });
+  if (error) throw new Error(`Falha ao salvar a imagem no Storage: ${error.message}`);
+
   return filename;
 }

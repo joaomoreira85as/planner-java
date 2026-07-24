@@ -30,18 +30,18 @@ e receba insights — tudo em uma interface escura com as cores do Instagram,
 ```bash
 npm install
 cp .env.example .env   # preencha as variáveis
-npm run dev:db         # (opcional) MongoDB local em memória, se não usar Atlas
 npm run dev            # http://localhost:3000
 ```
 
 Variáveis necessárias no `.env`:
 
-| Variável            | O que é                                                        |
-| ------------------- | -------------------------------------------------------------- |
-| `MONGODB_URI`       | MongoDB Atlas (grátis) ou local (`mongodb://127.0.0.1:27017/…`) |
-| `ANTHROPIC_API_KEY` | Chave da Claude API (textos e insights)                        |
-| `OPENAI_API_KEY`    | Chave da OpenAI (imagens gpt-image-1)                          |
-| `CRON_SECRET`       | Opcional — protege o endpoint de agendamento                   |
+| Variável            | O que é                                                          |
+| ------------------- | ---------------------------------------------------------------- |
+| `SUPABASE_URL`      | URL do projeto Supabase (Settings → API)                          |
+| `SUPABASE_KEY`      | Chave SECRETA do Supabase (service_role) — nunca vai ao navegador |
+| `ANTHROPIC_API_KEY` | Chave da Claude API (textos e insights)                           |
+| `OPENAI_API_KEY`    | Chave da OpenAI (imagens gpt-image-1)                             |
+| `CRON_SECRET`       | Opcional — protege o endpoint de agendamento                      |
 
 ## Publicação automática no futuro (Instagram Graph API)
 
@@ -52,7 +52,8 @@ O app já tem a arquitetura pronta (`src/lib/publisher/`):
    permissões `instagram_basic` e `instagram_content_publish`.
 3. Preencha `IG_USER_ID` e `IG_ACCESS_TOKEN` no `.env` e implemente o fluxo
    documentado em `src/lib/publisher/instagram-graph.ts`
-   (container de mídia → publish).
+   (container de mídia → publish). As imagens já ficam em URL pública no
+   Supabase Storage, como a Graph API exige.
 4. Agende o endpoint `GET /api/cron/publish` (header
    `Authorization: Bearer $CRON_SECRET`) via Vercel Cron ou cron do servidor —
    os posts `agendado` vencidos serão publicados automaticamente.
@@ -62,5 +63,6 @@ Enquanto isso, o mesmo endpoint move posts vencidos para a fila
 
 ## Stack
 
-Next.js (App Router) · TypeScript · Tailwind CSS v4 · MongoDB + Mongoose ·
-Claude API (`@anthropic-ai/sdk`) · OpenAI Images · Recharts · date-fns · Zod
+Next.js (App Router) · TypeScript · Tailwind CSS v4 · Supabase (Postgres +
+Storage) · Claude API (`@anthropic-ai/sdk`) · OpenAI Images · Recharts ·
+date-fns · Zod · Deploy na Vercel

@@ -40,7 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# imagens geradas e ambiente
-storage/images/*
-!storage/images/.gitkeep
+
 .env

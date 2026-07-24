@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { dbConnect } from "@/lib/db";
-import { Post } from "@/models";
+import { getSupabase, type PostRow } from "@/lib/supabase";
 import { getPublisher } from "@/lib/publisher";
 
 /**
@@ -10,7 +9,7 @@ import { getPublisher } from "@/lib/publisher";
  * formando a fila "Pronto para postar".
  * Futuro (Graph API configurada): publica automaticamente no Instagram.
  *
- * Agende com Vercel Cron (vercel.json) ou um cron/node-cron chamando:
+ * Agende com Vercel Cron (vercel.json) ou um cron externo chamando:
  *   GET /api/cron/publish  com header  Authorization: Bearer $CRON_SECRET
  */
 export async function GET(req: Request) {
@@ -21,23 +20,26 @@ export async function GET(req: Request) {
   }
 
   try {
-    await dbConnect();
-    const due = await Post.find({
-      status: "agendado",
-      scheduledAt: { $lte: new Date() },
-    }).lean();
+    const supabase = getSupabase();
+    const { data: due, error } = await supabase
+      .from("posts")
+      .select("id")
+      .eq("status", "agendado")
+      .lte("scheduled_at", new Date().toISOString())
+      .returns<Pick<PostRow, "id">[]>();
+    if (error) throw error;
 
     const publisher = getPublisher();
     const results: { id: string; ok: boolean; error?: string }[] = [];
-    for (const post of due) {
-      const r = await publisher.publish(String(post._id));
-      results.push({ id: String(post._id), ok: r.ok, error: r.error });
+    for (const post of due ?? []) {
+      const r = await publisher.publish(post.id);
+      results.push({ id: post.id, ok: r.ok, error: r.error });
     }
 
     return NextResponse.json({ publisher: publisher.id, processed: results });
   } catch {
     return NextResponse.json(
-      { error: "Banco de dados indisponível. Verifique MONGODB_URI." },
+      { error: "Banco de dados indisponível. Verifique SUPABASE_URL/SUPABASE_KEY." },
       { status: 503 }
     );
   }

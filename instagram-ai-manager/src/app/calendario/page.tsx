@@ -1,6 +1,5 @@
 import { CalendarDays } from "lucide-react";
-import { dbConnect } from "@/lib/db";
-import { Post } from "@/models";
+import { getSupabase, type PostRow } from "@/lib/supabase";
 import { serializePost } from "@/lib/serialize";
 import { PageHeader } from "@/components/ui";
 import { CalendarView } from "@/components/calendar/CalendarView";
@@ -10,14 +9,15 @@ export const dynamic = "force-dynamic";
 
 async function getPosts(): Promise<SerializedPost[]> {
   try {
-    await dbConnect();
-    const docs = await Post.find({
-      $or: [{ scheduledAt: { $ne: null } }, { publishedAt: { $ne: null } }],
-    })
-      .sort({ scheduledAt: 1 })
+    const supabase = getSupabase();
+    const { data } = await supabase
+      .from("posts")
+      .select()
+      .or("scheduled_at.not.is.null,published_at.not.is.null")
+      .order("scheduled_at", { ascending: true })
       .limit(300)
-      .lean();
-    return docs.map(serializePost);
+      .returns<PostRow[]>();
+    return (data ?? []).map(serializePost);
   } catch {
     return [];
   }
